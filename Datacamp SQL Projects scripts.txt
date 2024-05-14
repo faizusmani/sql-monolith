@@ -1,0 +1,252 @@
+--- Project: Evaluate a Manufacturing Process ---
+
+SELECT b.*,
+CASE WHEN b.height BETWEEN lcl AND ucl THEN FALSE ELSE TRUE END AS alert
+FROM(
+SELECT a.*,
+a.avg_height + 3*(a.stddev_height/SQRT(5)) AS ucl,
+a.avg_height - 3*(a.stddev_height/SQRT(5)) AS lcl
+FROM (
+SELECT operator, ROW_NUMBER() OVER w1 AS row_number, height, AVG(height) OVER w1 AS avg_height, STDDEV(height) OVER w1 AS stddev_height
+FROM manufacturing_parts
+WINDOW w1 AS (
+PARTITION BY operator
+ORDER BY item_no
+ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)) AS a) AS b
+WHERE b.row_number >= 5;
+
+
+--- Project: What and Where are the World's Oldest Businesses ---
+
+SELECT MIN(year_founded), MAX(year_founded)
+FROM businesses;
+
+SELECT COUNT(*)
+FROM businesses
+WHERE year_founded < 1000;
+
+SELECT *
+FROM businesses
+WHERE year_founded < 1000
+ORDER BY year_founded;
+
+SELECT business, year_founded, country_code, category
+FROM businesses AS b
+INNER JOIN categories AS c
+ON b.category_code = c.category_code
+WHERE b.year_founded < 1000
+ORDER BY b.year_founded;
+
+SELECT category, COUNT(c.category_code) AS n
+FROM categories AS c
+INNER JOIN businesses AS b
+ON c.category_code = b.category_code
+GROUP BY c.category_code
+ORDER BY n DESC
+LIMIT 10;
+
+SELECT MIN(b.year_founded) AS oldest, c.continent
+FROM businesses AS b
+INNER JOIN countries AS c
+ON b.country_code = c.country_code
+GROUP BY c.continent
+ORDER BY oldest;
+
+SELECT business, year_founded, category, country, continent
+FROM businesses AS b
+INNER JOIN categories AS ca
+ON b.category_code = ca.category_code
+INNER JOIN countries AS c
+ON b.country_code = c.country_code;
+
+SELECT continent, category, COUNT(*) AS n
+FROM businesses AS b
+INNER JOIN categories AS ca
+ON b.category_code = ca.category_code
+INNER JOIN countries AS c
+ON b.country_code = c.country_code
+GROUP BY c.continent, ca.category;
+
+SELECT continent, category, COUNT(*) AS n
+FROM businesses AS b
+INNER JOIN categories AS ca
+ON b.category_code = ca.category_code
+INNER JOIN countries AS c
+ON b.country_code = c.country_code
+GROUP BY c.continent, ca.category
+HAVING COUNT(*) > 5
+ORDER BY n DESC;
+
+
+--- Project: When Was the Golden Era of Video Games? ---
+
+SELECT * 
+FROM game_sales
+ORDER BY games_sold DESC
+LIMIT 10;
+
+SELECT year, COUNT(*) AS num_games, ROUND(AVG(critic_score),2) AS avg_critic_score
+FROM game_sales g
+JOIN reviews r USING(name)
+GROUP BY year
+HAVING COUNT(*) >=4
+ORDER BY avg_critic_score DESC
+LIMIT 10;
+
+SELECT u.year, u.num_games, avg_critic_score, avg_user_score, 
+ABS(avg_critic_score - avg_user_score) AS diff
+FROM public.users_avg_year_rating u
+JOIN public.critics_avg_year_rating c USING(year)
+WHERE avg_critic_score > 9 OR avg_user_score > 9
+ORDER BY diff;
+
+
+--- Project: Analyzing Industry Carbon Emissions ---
+
+SELECT industry_group, COUNT(DISTINCT(company)) AS num_companies, ROUND(SUM(carbon_footprint_pcf),1) AS total_industry_footprint
+FROM product_emissions
+WHERE year IN (SELECT MAX(year) FROM product_emissions)
+GROUP BY industry_group
+ORDER BY total_industry_footprint DESC;
+
+
+--- Project: Analyzing American Baby Name Trends ---
+
+SELECT first_name, SUM(num) 
+FROM baby_names
+GROUP BY first_name 
+HAVING COUNT(year)=101
+ORDER BY SUM(num) DESC;
+
+SELECT first_name, SUM(num), 
+CASE WHEN COUNT(first_name) > 80 THEN 'Classic'
+     WHEN COUNT(first_name) > 50 AND COUNT(first_name) <= 80 THEN 'Semi-classic'
+     WHEN COUNT(first_name) > 20 AND COUNT(first_name) <= 50 THEN 'Semi-trendy'
+     WHEN COUNT(first_name) > 0 AND COUNT(first_name) <= 20 THEN 'Trendy'
+END AS popularity_type
+FROM baby_names
+GROUP BY first_name
+ORDER BY first_name;
+
+SELECT RANK() OVER (ORDER BY SUM(num) DESC) AS name_rank, first_name, SUM(num)
+FROM baby_names
+WHERE sex = 'F'
+GROUP BY first_name
+LIMIT 10;
+
+SELECT first_name
+FROM baby_names
+WHERE sex = 'F' AND year > 2015 AND first_name LIKE '%a'
+GROUP BY first_name
+ORDER BY SUM(num) DESC;
+
+SELECT year, first_name, num, SUM(num) OVER (ORDER BY year) AS cumulative_olivias
+FROM baby_names
+WHERE first_name = 'Olivia'
+ORDER BY year;
+
+SELECT year, MAX(num) as max_num
+FROM baby_names
+WHERE sex = 'M'
+GROUP BY year;
+
+SELECT b.year, first_name, num
+FROM baby_names b
+JOIN (SELECT  year, MAX(num) as max_num 
+FROM baby_names
+WHERE sex = 'M'
+GROUP BY year) AS sq
+ON sq.year = b.year AND sq.max_num = b.num
+ORDER BY year DESC;
+
+WITH cte AS (SELECT b.year, first_name, num
+FROM baby_names b
+JOIN (SELECT  year, MAX(num) as max_num 
+FROM baby_names
+WHERE sex = 'M'
+GROUP BY year) AS sq
+ON sq.year = b.year AND sq.max_num = b.num
+ORDER BY year DESC)
+
+SELECT first_name, COUNT(*) AS count_top_name
+FROM cte
+GROUP BY first_name
+ORDER BY count_top_name DESC;
+
+
+--- Project: Analyze International Debt Statistics ---
+
+SELECT COUNT(DISTINCT(country_name
+)) AS total_distinct_countries
+FROM public.international_debt;
+
+SELECT DISTINCT(indicator_code
+) AS distinct_debt_indicators
+FROM public.international_debt;
+
+SELECT ROUND(SUM(debt)/1000000,2) AS total_debt
+FROM public.international_debt;
+
+SELECT country_name, SUM(debt) AS total_debt
+FROM public.international_debt
+GROUP BY country_name
+ORDER BY total_debt DESC
+LIMIT 1;
+
+SELECT indicator_code AS debt_indicator, indicator_name, AVG(debt) AS average_debt
+FROM public.international_debt
+GROUP BY indicator_code, indicator_name
+ORDER BY average_debt DESC;
+
+SELECT country_name, indicator_name
+FROM public.international_debt
+WHERE indicator_code = 'DT.AMT.DLXF.CD'
+ORDER BY debt DESC
+LIMIT 1;
+
+
+--- Project: Analyzing Students' Mental Health ---
+
+SELECT stay, COUNT(*) AS count_int, ROUND(AVG(todep),2) AS average_phq, ROUND(AVG(tosc),2) AS average_scs, ROUND(AVG(toas),2) AS average_as
+FROM students
+WHERE inter_dom = 'Inter' 
+GROUP BY stay
+ORDER BY stay DESC;
+
+
+--- Project: Analyzing Motorcycle Part Sales ---
+
+SELECT product_line, CASE 
+WHEN EXTRACT(MONTH from date) = 6 THEN 'June'
+WHEN EXTRACT(MONTH from date) = 7 THEN 'July'
+WHEN EXTRACT(MONTH from date) = 8 THEN 'August' 
+END AS month, warehouse, SUM(total)-SUM(payment_fee) AS net_revenue
+FROM sales
+WHERE client_type = 'Wholesale'
+GROUP BY product_line, EXTRACT(MONTH from date), warehouse
+ORDER BY product_line, EXTRACT(MONTH from date), net_revenue DESC;
+
+
+--- Project: Analyzing Unicorn Companies ---
+
+WITH top_industry AS (SELECT i.industry
+FROM industries AS i
+INNER JOIN dates AS d
+ON i.company_id = d.company_id
+WHERE EXTRACT(YEAR FROM d.date_joined) IN ('2019','2020','2021')
+GROUP BY i.industry
+ORDER BY COUNT(*) DESC
+LIMIT 3)
+
+SELECT i.industry, EXTRACT(YEAR FROM d.date_joined) AS year, COUNT(*) AS num_unicorns, ROUND(AVG(f.valuation)/1000000000,2) AS average_valuation_billions
+FROM companies AS c
+INNER JOIN dates AS d
+ON c.company_id = d.company_id
+INNER JOIN industries AS i
+ON c.company_id = i.company_id
+INNER JOIN funding AS f
+ON c.company_id = f.company_id
+WHERE EXTRACT(YEAR FROM d.date_joined) IN ('2019','2020','2021')
+AND i.industry IN (TABLE top_industry)
+GROUP BY i.industry, EXTRACT(YEAR FROM date_joined)
+ORDER BY year DESC, num_unicorns DESC;
